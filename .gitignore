@@ -161,3 +161,7 @@ cython_debug/
 
 # Torch Model
 *.pth
+
+polyvore_outfits*
+.DS_Store
+.vscode

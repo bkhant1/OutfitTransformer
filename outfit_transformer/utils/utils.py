@@ -35,7 +35,15 @@ def unstack_tensors(mask, tensor):
         return tensor
     mask = mask.view(-1)
     new_shape = [B * S] + list(tensor.shape)[1:]
-    new_tensor = torch.zeros(new_shape, dtype=tensor.dtype, device=tensor.get_device())
+    new_tensor = torch.zeros(
+        new_shape,
+        dtype=tensor.dtype,
+        device=(
+            tensor.get_device()
+            if tensor.get_device() != -1
+            else torch.device('cpu')
+        )
+    )
     new_tensor[~mask] = tensor
     new_tensor = new_tensor.contiguous().view([B, S] + list(tensor.shape)[1:])
     return new_tensor

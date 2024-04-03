@@ -103,7 +103,7 @@ class PolyvoreDataset(Dataset):
             desc = np.zeros(self.text_feat_dim, np.float32)
         return desc
     
-    def _get_inputs(self, item_ids, pad: bool=False) -> Dict[Literal['input_mask', 'img', 'desc'], Tensor]:
+    def _get_inputs(self, item_ids, pad: bool=False, ids=None) -> Dict[Literal['input_mask', 'img', 'desc'], Tensor]:
         category = [self.item_id2category[item_id] for item_id in item_ids]
         images = [self._load_img(item_id) for item_id in item_ids]
         if self.use_text:
@@ -111,7 +111,7 @@ class PolyvoreDataset(Dataset):
         elif self.use_text_feature:
             texts = [self._load_txt_feat(item_id) for item_id in item_ids]
 
-        return self.input_processor(category, images, texts, do_pad=pad)
+        return self.input_processor(category, images, texts, ids=ids, do_pad=pad)
 
     def _get_neg_samples(self, pos_id):
         
@@ -129,8 +129,11 @@ class PolyvoreDataset(Dataset):
             candidates = self._get_inputs(candidate_ids)
             return  {'questions': questions, 'candidates': candidates} # ans is always 0 index
 
-        elif self.args.task_type =='outfit':
-            outfits = self._get_inputs(self.data[idx], pad=True)
+        elif self.args.task_type =='outfit':            
+            if self.args.dataset_type in ('valid', 'test'):
+                outfits = self._get_inputs(self.data[idx], pad=True, ids=self.data[idx])
+            else:
+                outfits = self._get_inputs(self.data[idx], pad=True)
 
             return {'outfits': outfits}
         

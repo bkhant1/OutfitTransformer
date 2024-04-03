@@ -131,6 +131,7 @@ class DeepFashionInputProcessor:
 
         # Items for pad
         self.CATEGORY_PAD = 'pad'
+        self.ID_PAD = 0
         if use_image:
             self.IMAGE_PAD = np.zeros((image_processor.size, image_processor.size, 3), dtype='uint8')
         if use_text:
@@ -146,6 +147,7 @@ class DeepFashionInputProcessor:
             text_features: Optional[List[ndarray]]=None,
             do_pad: bool=False,
             do_truncation: bool=True,
+            ids: Optional[list[int]]=None,
             **kwargs
             ) -> Dict[str, Tensor]:
         """Preprocess set of outfit items.
@@ -201,5 +203,12 @@ class DeepFashionInputProcessor:
             if do_pad:
                 images = images + [self.IMAGE_PAD for _ in range(self.outfit_max_length - len(images))]
             inputs['image_features'] = self.image_processor(images, **kwargs)
+
+        if ids is not None:
+            if do_truncation:
+                ids = ids[:self.outfit_max_length]
+            if do_pad:
+                ids = ids + [self.ID_PAD for _ in range(self.outfit_max_length - len(ids))]
+            inputs['item_ids'] = torch.tensor([int(it) for it in ids])
 
         return inputs

@@ -38,7 +38,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     # Setup
-    device = torch.device(0) if torch.cuda.is_available() else torch.device(1)
+    device = torch.device(0) if torch.cuda.is_available() else torch.device('cpu')
 
     HUGGING_FACE = 'sentence-transformers/paraphrase-albert-small-v2'
     model = OutfitTransformer(
@@ -74,7 +74,22 @@ if __name__ == '__main__':
         test_fitb_dataloader = DataLoader(PolyvoreDataset(args.data_dir, test_fitb_dataset_args, tokenizer), 
                                         args.test_batch, shuffle=False)
     elif args.task=='cir':
-        pass
+        test_cir_dataset_args=DatasetArguments(
+            polyvore_split=args.polyvore_split,
+            task_type='outfit',
+            dataset_type='test',
+            outfit_max_length=16,
+            use_text=True
+        )
+        test_cir_dataloader = DataLoader(
+            PolyvoreDataset(
+                args.data_dir,
+                test_cir_dataset_args, 
+                tokenizer
+            ), 
+            args.test_batch, 
+            shuffle=False
+        )
 
     model.to(device)
     model.eval()
@@ -95,5 +110,11 @@ if __name__ == '__main__':
             print(f'TEST | Task: {args.test_task} | CP(AUC): {cp_score:.5f} | FITB(Acc): {fitb_score:.5f}')
 
         elif args.task=='cir':
-            pass
+            cir_score = model.cir_evaluation(
+                dataloader=test_cir_dataloader,
+                epoch=0,
+                is_test=True,
+                device=device
+            )
+
         

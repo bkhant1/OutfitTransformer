@@ -95,7 +95,7 @@ class OutfitTransformer(nn.Module):
         #------------------------------------------------------------------------------------------------#
 
 
-    def encode(self, inputs):
+    def encode(self, inputs, no_unstack=False):
         inputs = stack_dict(inputs)
         img_embedddings = self.img_encoder(inputs['image_features'])
         txt_embedddings = self.txt_encoder(
@@ -107,7 +107,10 @@ class OutfitTransformer(nn.Module):
             'mask': inputs['mask'],
             'embed': general_embeddings
             }
-        return unstack_dict(outputs)
+        if no_unstack:
+            return outputs
+        else:
+            return unstack_dict(outputs)
     
     
     def cp_forward(self, inputs, do_encode=False):
@@ -139,7 +142,8 @@ class OutfitTransformer(nn.Module):
         pass
 
 
-
+    def forward(self, inputs):
+        return self.cp_forward(inputs, do_encode=True)
     
 
     def iteration_step(self, batch, task, device):
@@ -281,20 +285,18 @@ class OutfitTransformer(nn.Module):
                     if cp_score > best_criterion:
                         best_criterion = cp_score
                         best_state = deepcopy(self.state_dict())
-                #----------------------------------------------------------------------------------------#
-                # Evaluation methods for CIR is not yet implemented
-                # elif task == 'cir':
-                #     cir_score = self.cir_evaluation(
-                #         dataloader = valid_cir_dataloader,
-                #         epoch = epoch,
-                #         is_test = False,
-                #         device = device,
-                #         use_wandb = use_wandb
-                #         )
-                #     if cir_score > best_criterion:
-                #         best_criterion = cir_score
-                #         best_state = deepcopy(self.state_dict())
-                #----------------------------------------------------------------------------------------#
+                elif task == 'cir':
+                    cir_score = self.cir_evaluation(
+                        dataloader = valid_cir_dataloader,
+                        epoch = epoch,
+                        is_test = False,
+                        device = device,
+                        use_wandb = use_wandb
+                        )
+                    if cir_score > best_criterion:
+                        best_criterion = cir_score
+                        best_state = deepcopy(self.state_dict())
+
             if epoch % save_every == 0:
                 model_name = f'{epoch}_{best_criterion:.3f}'
                 self._save(save_dir, model_name)
@@ -396,3 +398,87 @@ class OutfitTransformer(nn.Module):
         total_acc = sum(total_pred == 0) / len(total_pred)
         print(f'[{type_str} END] Epoch: {epoch + 1:03} | Acc: {total_acc:.5f}\n')
         return total_acc
+
+    def _build_embeddings_db(self, dataloader):
+        # Build the embeddings database
+        print("Build embeddings database")
+        all_embeddings = []
+        for i, batch in enumerate(tqdm(dataloader)):
+            data = batch['outfits'] 
+            product_ids = data['item_ids'][~data['mask']]
+            batch_size = data['mask'].shape[0]
+            batch_index = list(range(batch_size))
+
+            with torch.no_grad():
+                embeddings = self.encode(data, no_unstack=True)
+
+            all_embeddings.extend(zip(product_ids, embeddings['embed']))
+
+            if i > 1:
+                break
+
+        return {
+            'embeddings': torch.stack([torch.tensor(it[1]) for it in all_embeddings]),
+            'product_ids': torch.stack([it[0] for it in all_embeddings])
+        }
+
+    def cir_evaluation(self, dataloader, epoch, is_test, device, use_wandb=True):
+        type_str = 'cir_test' if is_test else 'cir_eval'
+        embeddings_db = self._build_embeddings_db(dataloader)
+        epoch_iterator = tqdm(dataloader)
+        overall_r_at_10 = 0
+        overall_r_at_30 = 0
+        overall_r_at_50 = 0
+
+        for iter, batch in enumerate(epoch_iterator, start=1):
+            n_outfit_per_batch = torch.sum(~batch['outfits']['mask'], dim=1).numpy()
+            target_item_idx = torch.LongTensor(
+                np.random.randint(
+                    low=0,
+                    high=n_outfit_per_batch
+                )
+            )
+            batch_size = len(target_item_idx)
+            batch_index = list(range(batch_size))
+            target_item_ids = batch['outfits']['item_ids'][batch_index, target_item_idx]
+            inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
+            x = self.encode(inputs)
+
+            # Hide the target item images, replacing them with the CIR token
+            x['embed'][batch_index, target_item_idx, :self.encode_dim] = \
+                x['embed'][batch_index, target_item_idx, :self.encode_dim] * 0
+            x['embed'][batch_index, target_item_idx, :self.encode_dim] = \
+                x['embed'][batch_index, target_item_idx, :self.encode_dim] + self.cir_embedding.expand(len(x['embed']), -1)
+            
+            # Product the query embeddings
+            query_embeddings = self.transformer(
+                x['embed'],
+                src_key_padding_mask=x['mask'].bool()
+            )[range(batch_size), target_item_idx, :]
+            query_embeddings = self.fc_projection(query_embeddings)
+
+            # Calculate the distance between query and db embeddings
+            distances = torch.cdist(query_embeddings, embeddings_db['embeddings'])
+            
+            # Top 10, top 30, top 50
+            top_10_item_ids = embeddings_db['product_ids'][distances.topk(10, dim=1).indices]
+            top_30_item_ids = embeddings_db['product_ids'][distances.topk(30, dim=1).indices]
+            top_50_item_ids = embeddings_db['product_ids'][distances.topk(50, dim=1).indices]
+
+            r_at_10 = sum(torch.isin(target_item_ids, top_10_item_ids))/batch_size
+            r_at_30 = sum(torch.isin(target_item_ids, top_30_item_ids))/batch_size
+            r_at_50 = sum(torch.isin(target_item_ids, top_50_item_ids))/batch_size
+
+            overall_r_at_10 = (overall_r_at_10 * (iter - 1) + r_at_10) / iter
+            overall_r_at_30 = (overall_r_at_30 * (iter - 1) + r_at_30) / iter
+            overall_r_at_50 = (overall_r_at_50 * (iter - 1) + r_at_50) / iter
+
+            epoch_iterator.set_description(
+                f'[{type_str}] Epoch: {epoch + 1:03} | r@10: {r_at_10:.2f}, r@30: {r_at_30:.2f}, r@50: {r_at_50:.2f}'
+            )
+            if iter > 10:
+                break 
+
+        print(f'[{type_str} END] Epoch: {epoch + 1:03} | r@10: {overall_r_at_10:.2f}, r@30: {overall_r_at_30:.2f}, r@50: {overall_r_at_50:.2f}\n')
+
+        return r_at_10

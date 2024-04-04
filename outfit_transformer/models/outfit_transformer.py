@@ -236,7 +236,7 @@ class OutfitTransformer(nn.Module):
         date = datetime.now().strftime('%Y-%m-%d')
         save_dir = os.path.join(save_dir, date)
 
-        device = torch.device(0) if device == 'cuda' else torch.device(1)
+        device = torch.device(0) if device == 'cuda' else torch.device('cpu')
         self.to(device)
 
         best_criterion = -np.inf
@@ -481,9 +481,9 @@ class OutfitTransformer(nn.Module):
                 overall_r_at_50 = (overall_r_at_50 * (iter - 1) + r_at_50) / iter
 
             epoch_iterator.set_description(
-                f'[{type_str}] Epoch: {epoch + 1:03} | r@10: {r_at_10:.2f}, r@30: {r_at_30:.2f}, r@50: {r_at_50:.2f}'
+                f'[{type_str}] Epoch: {epoch + 1:03} | r@10: {r_at_10:.3f}, r@30: {r_at_30:.3f}, r@50: {r_at_50:.3f}'
             )
 
-        print(f'[{type_str} END] Epoch: {epoch + 1:03} | r@10: {overall_r_at_10:.2f}, r@30: {overall_r_at_30:.2f}, r@50: {overall_r_at_50:.2f}\n')
+        print(f'[{type_str} END] Epoch: {epoch + 1:03} | r@10: {overall_r_at_10:.3f}, r@30: {overall_r_at_30:.3f}, r@50: {overall_r_at_50:.3f}\n')
 
-        return r_at_10
+        return overall_r_at_10

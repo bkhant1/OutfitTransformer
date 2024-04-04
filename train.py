@@ -123,7 +123,7 @@ if __name__ == '__main__':
             valid_dataloader = valid_dataloader,
             valid_cp_dataloader = valid_cp_dataloader,
             valid_fitb_dataloader = valid_fitb_dataloader,
-            device = 'cuda',
+            device = device,
             use_wandb = True if args.wandb_api_key else False,
             save_every = args.save_every,
             )
@@ -155,7 +155,7 @@ if __name__ == '__main__':
             train_dataloader = train_dataloader,
             valid_dataloader = valid_dataloader,
             valid_cir_dataloader = None,
-            device = 'cuda',
+            device = device,
             use_wandb = True if args.wandb_api_key else False,
             save_every = args.save_every,
             )

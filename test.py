@@ -82,7 +82,7 @@ if __name__ == '__main__':
             use_text=True
         )
         test_cir_dataloader = DataLoader(
-            PolyvoreDataset(
+            PolyvoreDatasetCir(
                 args.data_dir,
                 test_cir_dataset_args, 
                 tokenizer

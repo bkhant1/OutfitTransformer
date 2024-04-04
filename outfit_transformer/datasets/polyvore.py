@@ -103,19 +103,23 @@ class PolyvoreDataset(Dataset):
             desc = np.zeros(self.text_feat_dim, np.float32)
         return desc
     
-    def _get_inputs(self, item_ids, pad: bool=False, ids=None) -> Dict[Literal['input_mask', 'img', 'desc'], Tensor]:
+    def _get_inputs(self, item_ids, pad: bool=False, ids=None, target_id=None) -> Dict[Literal['input_mask', 'img', 'desc'], Tensor]:
         category = [self.item_id2category[item_id] for item_id in item_ids]
+        if target_id is not None:
+            category = [self.item_id2category[target_id]] + category
         images = [self._load_img(item_id) for item_id in item_ids]
+        if target_id:
+            images = [255*np.ones((224,224,3), np.uint8)] + images
         if self.use_text:
             texts = [self._load_txt(item_id) for item_id in item_ids]
+            if target_id is not None:
+                texts = [self._load_txt(target_id)] + texts
         elif self.use_text_feature:
             texts = [self._load_txt_feat(item_id) for item_id in item_ids]
+            if target_id is not None:
+                texts = [self._load_txt_feat(target_id)] + texts
 
         return self.input_processor(category, images, texts, ids=ids, do_pad=pad)
-
-    def _get_neg_samples(self, pos_id):
-        
-        return  random.sample(self.item_ids, self.args.n_neg)
 
     def __getitem__(self, idx):
         if self.args.task_type == 'cp':
@@ -129,7 +133,7 @@ class PolyvoreDataset(Dataset):
             candidates = self._get_inputs(candidate_ids)
             return  {'questions': questions, 'candidates': candidates} # ans is always 0 index
 
-        elif self.args.task_type =='outfit':            
+        elif self.args.task_type =='outfit':
             if self.args.dataset_type in ('valid', 'test'):
                 outfits = self._get_inputs(self.data[idx], pad=True, ids=self.data[idx])
             else:
@@ -145,7 +149,43 @@ class PolyvoreDataset(Dataset):
         
     def __len__(self):
         return len(self.data)
+
+
+class PolyvoreDatasetCir(PolyvoreDataset):
     
+    def __init__(
+            self,
+            data_dir: str,
+            args: DatasetArguments,
+            tokenizer: Optional[AutoTokenizer] = None,
+            hard=False
+            ):
+        super().__init__(data_dir, args, tokenizer)
+        self.hard = hard
+
+    def __getitem__(self, idx):
+        outfit_ids = self.data[idx] 
+        # Randomly select a positive
+        positive_index = random.choice(range(len(outfit_ids)))
+        positive_id = outfit_ids[positive_index]
+
+        outfit_ids = outfit_ids[0:positive_index] + outfit_ids[positive_index+1:]
+        outfits = self._get_inputs(outfit_ids, pad=True, ids=outfit_ids, target_id=positive_id)
+
+        positive = self._get_inputs([positive_id], ids=[positive_id])
+
+        # Sample negatives from the same category
+        if not self.hard:
+            item_category = self.item_id2category[positive_id]
+            negative_ids = random.choices(list(self.category2item_ids[item_category]), k=10)
+        else:
+            negative_ids = []
+            raise NotImplementedError()
+
+        negatives = self._get_inputs(negative_ids, ids=negative_ids)
+
+        return {'outfits': outfits, 'positive': positive, 'negatives': negatives}
+
 
 def load_fitb_inputs(data_dir, args, outfit_id2item_id):
     fitb_path = os.path.join(data_dir, args.polyvore_split, f'fill_in_blank_{args.dataset_type}.json')

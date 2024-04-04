@@ -143,9 +143,9 @@ if __name__ == '__main__':
             outfit_max_length=args.outfit_max_length,
             use_text=True
             )
-        train_dataloader = DataLoader(PolyvoreDataset(args.data_dir, train_dataset_args, tokenizer),
+        train_dataloader = DataLoader(PolyvoreDatasetCir(args.data_dir, train_dataset_args, tokenizer),
                                     args.train_batch, shuffle=True, num_workers=args.num_workers)
-        valid_dataloader = DataLoader(PolyvoreDataset(args.data_dir, valid_dataset_args, tokenizer),
+        valid_dataloader = DataLoader(PolyvoreDatasetCir(args.data_dir, valid_dataset_args, tokenizer),
                                     args.valid_batch, shuffle=False, num_workers=args.num_workers)
         model.fit(
             task = args.task,
@@ -158,7 +158,7 @@ if __name__ == '__main__':
             device = device,
             use_wandb = True if args.wandb_api_key else False,
             save_every = args.save_every,
-            )
+        )
 
 
     

@@ -26,7 +26,7 @@ from torch.utils.data import DataLoader
 from outfit_transformer.utils.utils import *
 from outfit_transformer.models.encoder.builder import *
 from outfit_transformer.loss.focal_loss import focal_loss
-from outfit_transformer.loss.triplet_loss import triplet_loss
+from outfit_transformer.loss.triplet_loss import outfit_triplet_loss, triplet_loss
 
 
 class OutfitTransformer(nn.Module):
@@ -154,27 +154,46 @@ class OutfitTransformer(nn.Module):
             logits = self.cp_forward(inputs, do_encode=True)
             loss = focal_loss(logits, targets.to(device))
         elif task == 'cir':
-            # Randomly extract the number of items to be used as query and answer.
-            n_outfit_per_batch = torch.sum(~batch['outfits']['mask'], dim=1).numpy()
-            target_item_idx = torch.LongTensor(np.random.randint(low=0, high=n_outfit_per_batch))
-            # Encode
+            positive = batch['positive']
+            negatives = batch['negatives']
+            outfit = batch['outfits']
+            batch_size = outfit['mask'].shape[0]
+
             inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
-            x = self.encode(inputs)
-            # Extract and copy items to use as positives for triplet loss.
-            target_item_embeddings = x['embed'][range(len(target_item_idx)), target_item_idx].clone()
-            # Change the front part of embedding at the location corresponding to `target_item_idx` to `cir_embedding`
-            # The permutation variable nature of the transformer structure does not interfere with the results.
-            x['embed'][range(len(target_item_idx)), target_item_idx, :self.encode_dim] = \
-                x['embed'][range(len(target_item_idx)), target_item_idx, :self.encode_dim] * 0
-            x['embed'][range(len(target_item_idx)), target_item_idx, :self.encode_dim] = \
-                x['embed'][range(len(target_item_idx)), target_item_idx, :self.encode_dim] + self.cir_embedding.expand(len(x['embed']), -1)
-            # Take the output of the location corresponding to `target_item_idx`
-            # As above reason, results are not interfere with the results.
-            y = self.transformer(x['embed'], src_key_padding_mask=x['mask'].bool())[range(len(target_item_idx)), target_item_idx, :]
+            encoded_outfit = self.encode(inputs)
+            encoded_positive = self.encode(positive)
+            encoded_negatives = self.encode(negatives)
+
+            # The query is always at the front, see PolyvoreDatasetCir
+            y = self.transformer(
+                encoded_outfit['embed'], 
+                src_key_padding_mask=encoded_outfit['mask'].bool()
+            )[range(batch_size), 0, :]
             y = self.fc_projection(y)
-            # Margin is same as paper(2)
-            # Use both batch all, hard strategy and added them.
-            loss = triplet_loss(y, target_item_embeddings, margin=2, method='both')
+
+            loss = outfit_triplet_loss(y, encoded_positive['embed'], encoded_negatives['embed'], margin=2)
+
+            # # Randomly extract the number of items to be used as query and answer.
+            # n_outfit_per_batch = torch.sum(~batch['outfits']['mask'], dim=1).numpy()
+            # target_item_idx = torch.LongTensor(np.random.randint(low=0, high=n_outfit_per_batch))
+            # # Encode
+            # inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
+            # x = self.encode(inputs)
+            # # Extract and copy items to use as positives for triplet loss.
+            # target_item_embeddings = x['embed'][range(len(target_item_idx)), target_item_idx].clone()
+            # # Change the front part of embedding at the location corresponding to `target_item_idx` to `cir_embedding`
+            # # The permutation variable nature of the transformer structure does not interfere with the results.
+            # x['embed'][range(len(target_item_idx)), target_item_idx, :self.encode_dim] = \
+            #     x['embed'][range(len(target_item_idx)), target_item_idx, :self.encode_dim] * 0
+            # x['embed'][range(len(target_item_idx)), target_item_idx, :self.encode_dim] = \
+            #     x['embed'][range(len(target_item_idx)), target_item_idx, :self.encode_dim] + self.cir_embedding.expand(len(x['embed']), -1)
+            # # Take the output of the location corresponding to `target_item_idx`
+            # # As above reason, results are not interfere with the results.
+            # y = self.transformer(x['embed'], src_key_padding_mask=x['mask'].bool())[range(len(target_item_idx)), target_item_idx, :]
+            # y = self.fc_projection(y)
+            # # Margin is same as paper(2)
+            # # Use both batch all, hard strategy and added them.
+            # loss = triplet_loss(y, target_item_embeddings, margin=2, method='both')
 
         return loss
 

@@ -24,6 +24,28 @@ from torch.utils.data import DataLoader
 def safe_divide(a, b, eps=1e-7):
     return a / (b + eps)
 
+
+def outfit_triplet_loss(
+    query_embeds,
+    positive_embeds,
+    negative_embeds,
+    margin=2,
+):
+    # Distance between positive and query 
+    positive_distance = torch.cdist(query_embeds.unsqueeze(1), positive_embeds.unsqueeze(1)).squeeze(1).squeeze(1)
+
+    # Distance between negatives and query 
+    negative_distances = torch.cdist(query_embeds.unsqueeze(1), negative_embeds).squeeze(1)
+
+    l_all = torch.sum(
+        torch.clamp(positive_distance.unsqueeze(1) - negative_distances + 2, 0),
+        dim=1
+    ) / negative_distances.shape[1]
+    l_hard = (positive_distance - torch.max(negative_distances, dim=1).values)
+    l_all = torch.clamp(torch.sum(positive_distance ) / negative_distances.shape[1], 0)
+
+    return torch.mean(l_hard + l_all)
+    
 def triplet_loss(
           anchor_embeds,
           positive_embeds, 
@@ -53,7 +75,6 @@ def triplet_loss(
         # Compute Negative distances
         # dist_matrix의 대각 요소를 0
         neg_matrix = dist_matrix * torch.ones_like(dist_matrix).fill_diagonal_(0.)
-
 
         if method == 'both':
             neg_dist_all = safe_divide(torch.sum(neg_matrix, dim=-1), torch.count_nonzero(neg_matrix, dim=-1))

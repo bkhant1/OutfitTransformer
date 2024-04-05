@@ -10,7 +10,7 @@ from itertools import chain
 
 import torch
 from torch.optim import AdamW
-from torch.utils.data import DataLoader
+from torch.utils.data import DataLoader, Subset
 
 import albumentations as A
 from albumentations.pytorch import ToTensorV2
@@ -82,10 +82,13 @@ if __name__ == '__main__':
             use_text=True
         )
         test_cir_dataloader = DataLoader(
+            # Subset(
             PolyvoreDatasetCir(
                 args.data_dir,
                 test_cir_dataset_args, 
                 tokenizer
+            ),
+            # range(0,51)
             ), 
             args.test_batch, 
             shuffle=False

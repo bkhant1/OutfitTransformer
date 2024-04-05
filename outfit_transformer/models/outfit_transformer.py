@@ -132,19 +132,29 @@ class OutfitTransformer(nn.Module):
         logits = F.sigmoid(y)
         return logits
     
-    def cir_forward(self, inputs, desc_inputs = None):
-        # if desc_inputs:
-        #     desc_x = self.txt_encoder(desc_inputs)
-        #     query_x = torch.cat([
-                
-        #     ])
-        # x = self.encode(inputs)
-        pass
+    def cir_forward(self, batch, device):
+        positive = batch['positive']
+        negatives = batch['negatives']
+        outfit = batch['outfits']
+        batch_size = outfit['mask'].shape[0]
 
+        inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
+        encoded_outfit = self.encode(inputs)
+        encoded_positive = self.encode(positive)
+        encoded_negatives = self.encode(negatives)
+
+        # The query is always at the front, see PolyvoreDatasetCir
+        y = self.transformer(
+            encoded_outfit['embed'], 
+            src_key_padding_mask=encoded_outfit['mask'].bool()
+        )[range(batch_size), 0, :]
+        y = self.fc_projection(y)
+
+        return y, encoded_positive['embed'], encoded_negatives['embed']
 
     def forward(self, inputs):
         return self.cp_forward(inputs, do_encode=True)
-    
+ 
 
     def iteration_step(self, batch, task, device):
         if task == 'cp':
@@ -154,24 +164,9 @@ class OutfitTransformer(nn.Module):
             logits = self.cp_forward(inputs, do_encode=True)
             loss = focal_loss(logits, targets.to(device))
         elif task == 'cir':
-            positive = batch['positive']
-            negatives = batch['negatives']
-            outfit = batch['outfits']
-            batch_size = outfit['mask'].shape[0]
+            y, positive_embed, negative_embeds = self.cir_forward(batch, device)
 
-            inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
-            encoded_outfit = self.encode(inputs)
-            encoded_positive = self.encode(positive)
-            encoded_negatives = self.encode(negatives)
-
-            # The query is always at the front, see PolyvoreDatasetCir
-            y = self.transformer(
-                encoded_outfit['embed'], 
-                src_key_padding_mask=encoded_outfit['mask'].bool()
-            )[range(batch_size), 0, :]
-            y = self.fc_projection(y)
-
-            loss = outfit_triplet_loss(y, encoded_positive['embed'], encoded_negatives['embed'], margin=2)
+            loss = outfit_triplet_loss(y, positive_embed, negative_embeds, margin=2)
 
             # # Randomly extract the number of items to be used as query and answer.
             # n_outfit_per_batch = torch.sum(~batch['outfits']['mask'], dim=1).numpy()
@@ -455,31 +450,10 @@ class OutfitTransformer(nn.Module):
 
         for iter, batch in enumerate(epoch_iterator, start=1):
             with torch.no_grad():
-                n_outfit_per_batch = torch.sum(~batch['outfits']['mask'], dim=1).numpy()
-                target_item_idx = torch.LongTensor(
-                    np.random.randint(
-                        low=0,
-                        high=n_outfit_per_batch
-                    )
-                )
-                batch_size = len(target_item_idx)
-                batch_index = list(range(batch_size))
-                target_item_ids = batch['outfits']['item_ids'][batch_index, target_item_idx]
-                inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
-                x = self.encode(inputs)
-
-                # Hide the target item images, replacing them with the CIR token
-                x['embed'][batch_index, target_item_idx, :self.encode_dim] = \
-                    x['embed'][batch_index, target_item_idx, :self.encode_dim] * 0
-                x['embed'][batch_index, target_item_idx, :self.encode_dim] = \
-                    x['embed'][batch_index, target_item_idx, :self.encode_dim] + self.cir_embedding.expand(len(x['embed']), -1)
-
-                # Product the query embeddings
-                query_embeddings = self.transformer(
-                    x['embed'],
-                    src_key_padding_mask=x['mask'].bool()
-                )[range(batch_size), target_item_idx, :]
-                query_embeddings = self.fc_projection(query_embeddings)
+                target_item_ids = batch['positive']['item_ids']
+                batch_size = target_item_ids.shape[0]
+                
+                query_embeddings, _, _ = self.cir_forward(batch, device)
 
                 # Calculate the distance between query and db embeddings
                 distances = torch.cdist(
@@ -491,9 +465,9 @@ class OutfitTransformer(nn.Module):
                 top_30_item_ids = embeddings_db['product_ids'][distances.topk(30, dim=1).indices]
                 top_50_item_ids = embeddings_db['product_ids'][distances.topk(50, dim=1).indices]
 
-                r_at_10 = sum(torch.isin(target_item_ids, top_10_item_ids))/batch_size
-                r_at_30 = sum(torch.isin(target_item_ids, top_30_item_ids))/batch_size
-                r_at_50 = sum(torch.isin(target_item_ids, top_50_item_ids))/batch_size
+                r_at_10 = (sum(torch.isin(target_item_ids, top_10_item_ids))/batch_size).item()
+                r_at_30 = (sum(torch.isin(target_item_ids, top_30_item_ids))/batch_size).item()
+                r_at_50 = (sum(torch.isin(target_item_ids, top_50_item_ids))/batch_size).item()
 
                 overall_r_at_10 = (overall_r_at_10 * (iter - 1) + r_at_10) / iter
                 overall_r_at_30 = (overall_r_at_30 * (iter - 1) + r_at_30) / iter

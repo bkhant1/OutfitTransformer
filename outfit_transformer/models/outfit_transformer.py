@@ -133,15 +133,15 @@ class OutfitTransformer(nn.Module):
         return logits
     
     def cir_forward(self, batch, device):
-        positive = batch['positive']
-        negatives = batch['negatives']
-        outfit = batch['outfits']
         batch_size = outfit['mask'].shape[0]
 
         inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
-        encoded_outfit = self.encode(inputs)
-        encoded_positive = self.encode(positive)
-        encoded_negatives = self.encode(negatives)
+        outfit_inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
+        encoded_outfit = self.encode(outfit_inputs)
+        positive_inputs = {key: value.to(device) for key, value in batch['positive'].items()}
+        encoded_positive = self.encode(positive_inputs)
+        negatives_inputs = {key: value.to(device) for key, value in batch['negatives'].items()}
+        encoded_negatives = self.encode(negatives_inputs)
 
         # The query is always at the front, see PolyvoreDatasetCir
         y = self.transformer(
@@ -165,7 +165,6 @@ class OutfitTransformer(nn.Module):
             loss = focal_loss(logits, targets.to(device))
         elif task == 'cir':
             y, positive_embed, negative_embeds = self.cir_forward(batch, device)
-
             loss = outfit_triplet_loss(y, positive_embed, negative_embeds, margin=2)
 
             # # Randomly extract the number of items to be used as query and answer.

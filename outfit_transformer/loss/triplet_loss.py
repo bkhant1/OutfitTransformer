@@ -25,27 +25,44 @@ def safe_divide(a, b, eps=1e-7):
     return a / (b + eps)
 
 
-def outfit_triplet_loss(
-    query_embeds,
-    positive_embeds,
-    negative_embeds,
-    margin=2,
-):
-    # Distance between positive and query 
-    positive_distance = torch.cdist(query_embeds.unsqueeze(1), positive_embeds.unsqueeze(1)).squeeze(1).squeeze(1)
+# def outfit_triplet_loss_not_gpt(
+#     query_embeds,
+#     positive_embeds,
+#     negative_embeds,
+#     margin=2,
+# ):
+#     # Distance between positive and query 
+#     positive_distance = torch.cdist(query_embeds.unsqueeze(1), positive_embeds.unsqueeze(1)).squeeze(1).squeeze(1)
 
-    # Distance between negatives and query 
+#     # Distance between negatives and query 
+#     negative_distances = torch.cdist(query_embeds.unsqueeze(1), negative_embeds).squeeze(1)
+
+#     l_all = torch.sum(
+#         torch.clamp(positive_distance.unsqueeze(1) - negative_distances + margin, min=0),
+#         dim=1
+#     ) / negative_distances.shape[1]
+#     l_hard = torch.clamp(
+#         positive_distance - torch.min(negative_distances, dim=1).values + 2, min=0
+#     )
+
+#     return torch.mean(l_hard + l_all)
+
+
+def outfit_triplet_loss(query_embeds, positive_embeds, negative_embeds, margin=2):
+    # Calculate distances
+    positive_distance = torch.cdist(query_embeds.unsqueeze(1), positive_embeds.unsqueeze(1)).squeeze()
     negative_distances = torch.cdist(query_embeds.unsqueeze(1), negative_embeds).squeeze(1)
 
-    l_all = torch.sum(
-        torch.clamp(positive_distance.unsqueeze(1) - negative_distances + 2, 0),
-        dim=1
-    ) / negative_distances.shape[1]
-    l_hard = (positive_distance - torch.max(negative_distances, dim=1).values)
-    l_all = torch.clamp(torch.sum(positive_distance ) / negative_distances.shape[1], 0)
+    # Calculate losses
+    l_all = torch.mean(torch.clamp(positive_distance.unsqueeze(1) - negative_distances + margin, min=0), dim=1)
+    l_hard = torch.clamp(positive_distance - torch.max(negative_distances, dim=1).values + margin, min=0)
 
-    return torch.mean(l_hard + l_all)
-    
+    # Combine the losses
+    loss = torch.mean(l_hard + l_all)
+
+    return loss
+
+
 def triplet_loss(
           anchor_embeds,
           positive_embeds, 

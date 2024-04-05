@@ -413,7 +413,7 @@ class OutfitTransformer(nn.Module):
         print(f'[{type_str} END] Epoch: {epoch + 1:03} | Acc: {total_acc:.5f}\n')
         return total_acc
 
-    def _build_embeddings_db(self, dataloader, device):
+    def build_embeddings_db(self, dataloader, device):
         # Build the embeddings database
         print("Build embeddings database")
         all_embeddings = []

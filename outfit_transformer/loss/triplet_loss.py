@@ -55,7 +55,7 @@ def outfit_triplet_loss(query_embeds, positive_embeds, negative_embeds, margin=2
 
     # Calculate losses
     l_all = torch.mean(torch.clamp(positive_distance.unsqueeze(1) - negative_distances + margin, min=0), dim=1)
-    l_hard = torch.clamp(positive_distance - torch.max(negative_distances, dim=1).values + margin, min=0)
+    l_hard = torch.clamp(positive_distance - torch.min(negative_distances, dim=1).values + margin, min=0)
 
     # Combine the losses
     loss = torch.mean(l_hard + l_all)

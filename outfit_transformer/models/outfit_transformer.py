@@ -440,7 +440,7 @@ class OutfitTransformer(nn.Module):
 
     def cir_evaluation(self, dataloader, epoch, is_test, device, use_wandb=True):
         type_str = 'cir_test' if is_test else 'cir_eval'
-        embeddings_db = self._build_embeddings_db(dataloader, device)
+        embeddings_db = self.build_embeddings_db(dataloader, device)
         epoch_iterator = tqdm(dataloader)
         overall_r_at_10 = 0
         overall_r_at_30 = 0
@@ -450,7 +450,7 @@ class OutfitTransformer(nn.Module):
             with torch.no_grad():
                 target_item_ids = batch['positive']['item_ids']
                 batch_size = target_item_ids.shape[0]
-                
+
                 query_embeddings, _, _ = self.cir_forward(batch, device)
 
                 # Calculate the distance between query and db embeddings

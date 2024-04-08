@@ -103,7 +103,13 @@ class PolyvoreDataset(Dataset):
             desc = np.zeros(self.text_feat_dim, np.float32)
         return desc
     
-    def _get_inputs(self, item_ids, pad: bool=False, ids=None, target_id=None) -> Dict[Literal['input_mask', 'img', 'desc'], Tensor]:
+    def _get_inputs(
+        self,
+        item_ids, 
+        pad: bool=False, 
+        ids=None, 
+        target_id=None
+    ) -> Dict[Literal['input_mask', 'img', 'desc'], Tensor]:
         category = [self.item_id2category[item_id] for item_id in item_ids]
         if target_id is not None:
             category = [self.item_id2category[target_id]] + category
@@ -113,7 +119,8 @@ class PolyvoreDataset(Dataset):
         if self.use_text:
             texts = [self._load_txt(item_id) for item_id in item_ids]
             if target_id is not None:
-                texts = [self._load_txt(target_id)] + texts
+                # For the target item, we provide category only as text feature.
+                texts = [self.item_id2category[target_id]] + texts
         elif self.use_text_feature:
             texts = [self._load_txt_feat(item_id) for item_id in item_ids]
             if target_id is not None:
@@ -172,7 +179,10 @@ class PolyvoreDatasetCir(PolyvoreDataset):
         outfit_ids = outfit_ids[0:positive_index] + outfit_ids[positive_index+1:]
         outfits = self._get_inputs(outfit_ids, pad=True, ids=outfit_ids, target_id=positive_id)
 
-        positive = self._get_inputs([positive_id], ids=[positive_id])
+        positive = self._get_inputs(
+            [positive_id],
+            ids=[positive_id],
+        )
 
         # Sample negatives from the same category
         if not self.hard:

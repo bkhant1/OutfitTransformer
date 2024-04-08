@@ -131,10 +131,9 @@ class OutfitTransformer(nn.Module):
         y = self.fc_classifier(y)
         logits = F.sigmoid(y)
         return logits
-    
+
     def cir_forward(self, batch, device):
         batch_size = batch['outfits']['mask'].shape[0]
-        inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
         outfit_inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
         encoded_outfit = self.encode(outfit_inputs)
         positive_inputs = {key: value.to(device) for key, value in batch['positive'].items()}

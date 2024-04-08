@@ -205,7 +205,7 @@ class OutfitTransformer(nn.Module):
             if is_train == True:
                 optimizer.zero_grad()
                 running_loss.backward()
-                torch.nn.utils.clip_grad_norm_(self.parameters(), 5)
+                # torch.nn.utils.clip_grad_norm_(self.parameters(), 5)
                 optimizer.step()
                 if scheduler:
                     scheduler.step()

@@ -50,7 +50,7 @@ def safe_divide(a, b, eps=1e-7):
 
 def outfit_triplet_loss(query_embeds, positive_embeds, negative_embeds, margin=2):
     # Calculate distances
-    positive_distance = torch.cdist(query_embeds.unsqueeze(1), positive_embeds.unsqueeze(1)).squeeze()
+    positive_distance = torch.cdist(query_embeds.unsqueeze(1), positive_embeds).squeeze()
     negative_distances = torch.cdist(query_embeds.unsqueeze(1), negative_embeds).squeeze(1)
 
     # Calculate losses

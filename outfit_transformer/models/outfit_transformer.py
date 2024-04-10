@@ -134,12 +134,31 @@ class OutfitTransformer(nn.Module):
 
     def cir_forward(self, batch, device):
         batch_size = batch['outfits']['mask'].shape[0]
-        outfit_inputs = {key: value.to(device) for key, value in batch['outfits'].items()}
-        encoded_outfit = self.encode(outfit_inputs)
-        positive_inputs = {key: value.to(device) for key, value in batch['positive'].items()}
-        encoded_positive = self.encode(positive_inputs)
-        negatives_inputs = {key: value.to(device) for key, value in batch['negatives'].items()}
-        encoded_negatives = self.encode(negatives_inputs)
+
+        n_outfits = batch['outfits']['mask'].shape[1]
+        n_positive = batch['positive']['mask'].shape[1]
+        n_negatives = batch['negatives']['mask'].shape[1]
+
+        concatenated_inputs = {
+            key: torch.cat((
+                batch['outfits'][key],
+                batch['positive'][key],
+                batch['negatives'][key]
+            ), dim=1)
+            for key in batch['outfits'].keys()
+        }
+
+        device_inputs = {key: value.to(device) for key, value in concatenated_inputs.items()}
+        
+        encoded_inputs = self.encode(device_inputs)
+
+        encoded_outfit, encoded_positive, encoded_negatives = (
+            {
+                k: encoded_inputs[k].split([n_outfits, n_positive, n_negatives], dim=1)[i]
+                for k in encoded_inputs
+            }
+            for i in (0, 1, 2)
+        )
 
         # The query is always at the front, see PolyvoreDatasetCir
         y = self.transformer(

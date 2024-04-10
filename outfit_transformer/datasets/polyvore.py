@@ -25,6 +25,8 @@ from torch.utils.data import Dataset, DataLoader
 from outfit_transformer.utils.utils import *
 from outfit_transformer.datasets.processor import *
 
+import sys
+
 
 @dataclass
 class DatasetArguments:
@@ -172,6 +174,7 @@ class PolyvoreDatasetCir(PolyvoreDataset):
         self.hard = hard
 
     def __getitem__(self, idx):
+        random.seed(42)
         outfit_ids = self.data[idx] 
         # Randomly select a positive
         positive_index = random.choice(range(len(outfit_ids)))

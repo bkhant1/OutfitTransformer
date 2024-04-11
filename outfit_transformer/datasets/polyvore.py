@@ -174,7 +174,6 @@ class PolyvoreDatasetCir(PolyvoreDataset):
         self.hard = hard
 
     def __getitem__(self, idx):
-        random.seed(42)
         outfit_ids = self.data[idx] 
         # Randomly select a positive
         positive_index = random.choice(range(len(outfit_ids)))

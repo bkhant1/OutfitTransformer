@@ -30,14 +30,15 @@ class DeepFashionImageProcessor:
     def __init__(
             self,
             size: int = 224,
-            use_custom_transform: bool = False,
-            custom_transform: Optional[List[Any]] = None
+            custom_transform: Optional[Callable] = None
             ):
         self.size = size
-        transform = list()
 
-        if use_custom_transform:
-            transform += custom_transform
+        if custom_transform:
+            self.transform = custom_transform
+            return
+
+        transform = list()
 
         if not any(isinstance(x, A.Resize) for x in transform):
             transform.append(A.Resize(size, size))
@@ -58,7 +59,10 @@ class DeepFashionImageProcessor:
         :param images       : List of images of cloths, which is first converted to ndarray via cv2.
         :return: Preprocessed image as Tensor form.
         """
-        images = [self.transform(image=image)['image'] for image in images]
+        images = [
+            self.transform(image=image)['image']
+            for image in images
+        ]
 
         return torch.stack(images)
 

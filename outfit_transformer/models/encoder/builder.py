@@ -21,6 +21,8 @@ def build_img_encoder(
         encoder = VGG13Encoder(embedding_dim, do_linear_probing, normalize)
     elif backbone == 'efficientnet-b0':
         encoder = EfficientNetB0Encoder(embedding_dim, do_linear_probing, normalize)
+    elif backbone == 'fashionclip':
+        encoder = FashionCLIPTransformerEncoder(embedding_dim, do_linear_probing, normalize)
     else:
         raise ValueError(
             f'{backbone} is not supported.'

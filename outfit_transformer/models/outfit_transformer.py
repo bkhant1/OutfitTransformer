@@ -35,14 +35,17 @@ class OutfitTransformer(nn.Module):
             self,
             embedding_dim: int = 128,
             img_backbone: str = 'resnet-18',
-            txt_backbone: str = 'bert',
+            txt_backbone: Optional[str] = 'bert',
             txt_huggingface: str = 'sentence-transformers/paraphrase-albert-small-v2',
             nhead = 16,
             dim_feedforward = 512, # Not specified; use 4x the built-in size the same as BERT
             num_layers = 6
             ):
         super().__init__()
-        self.encode_dim = embedding_dim // 2
+        if txt_backbone:
+            self.encode_dim = embedding_dim // 2
+        else:
+            self.encode_dim = embedding_dim
         self.embedding_dim = embedding_dim
         #------------------------------------------------------------------------------------------------#
         # Encoder
@@ -50,12 +53,16 @@ class OutfitTransformer(nn.Module):
             backbone = img_backbone, 
             embedding_dim = self.encode_dim
             )
-        self.txt_encoder = build_txt_encoder(
-            backbone = txt_backbone, 
-            embedding_dim = self.encode_dim, 
-            huggingface = txt_huggingface, 
-            do_linear_probing = True
-            )
+        if txt_backbone:
+            self.txt_encoder = build_txt_encoder(
+                backbone = txt_backbone, 
+                embedding_dim = self.encode_dim, 
+                huggingface = txt_huggingface, 
+                do_linear_probing = True
+                )
+        else:
+            self.txt_encoder = None
+
         #------------------------------------------------------------------------------------------------#
         # Transformer
         encoder_layer = nn.TransformerEncoderLayer(
@@ -97,12 +104,15 @@ class OutfitTransformer(nn.Module):
 
     def encode(self, inputs, no_unstack=False):
         inputs = stack_dict(inputs)
-        img_embedddings = self.img_encoder(inputs['image_features'])
-        txt_embedddings = self.txt_encoder(
-            input_ids = inputs['input_ids'],
-            attention_mask = inputs['attention_mask']
-            )
-        general_embeddings = torch.concat([img_embedddings, txt_embedddings], dim=-1)
+        img_embedddings = [self.img_encoder(inputs['image_features'])]
+        if self.txt_encoder is not None:
+            txt_embedddings = [self.txt_encoder(
+                input_ids = inputs['input_ids'],
+                attention_mask = inputs['attention_mask']
+                )]
+        else:
+            txt_embedddings = []
+        general_embeddings = torch.concat(img_embedddings + txt_embedddings, dim=-1)
         outputs = {
             'mask': inputs['mask'],
             'embed': general_embeddings

@@ -7,7 +7,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torchvision.models import resnet18, swin_s, vgg13, efficientnet_b0
-from transformers import AutoModel
+from transformers import CLIPProcessor, CLIPModel, CLIPVisionModelWithProjection
 
 class BaseEncoder(nn.Module):
     def __init__(
@@ -99,3 +99,32 @@ class SwinTransformerEncoder(BaseEncoder):
             )
         if do_linear_probing:
             self.freeze_backbone()
+
+
+class FashionCLIPTransformerEncoder(BaseEncoder):
+
+    def __init__(
+            self,
+            embedding_dim: int=512,
+            do_linear_probing: bool = False,
+            normalize: bool = False
+            ):
+        super().__init__(embedding_dim, do_linear_probing, normalize)
+        if embedding_dim != 512:
+            raise Exception("FashionCLIPTransformerEncoder can only be used with 512 embedding dim")
+        # model = CLIPModel.from_pretrained("patrickjohncyh/fashion-clip")
+        self.model = CLIPVisionModelWithProjection.from_pretrained("patrickjohncyh/fashion-clip")
+        if do_linear_probing:
+            self.freeze_backbone()
+
+    def freeze_backbone(self):
+        for param in self.model.parameters():
+            param.requires_grad = False
+
+    def forward(self, x):
+        y = self.model(x)
+        y = y.image_embeds
+        if self.normalize:
+            y = F.normalize(y, p=2, dim=1)
+        
+        return y

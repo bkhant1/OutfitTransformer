@@ -25,29 +25,6 @@ def safe_divide(a, b, eps=1e-7):
     return a / (b + eps)
 
 
-# def outfit_triplet_loss_not_gpt(
-#     query_embeds,
-#     positive_embeds,
-#     negative_embeds,
-#     margin=2,
-# ):
-#     # Distance between positive and query 
-#     positive_distance = torch.cdist(query_embeds.unsqueeze(1), positive_embeds.unsqueeze(1)).squeeze(1).squeeze(1)
-
-#     # Distance between negatives and query 
-#     negative_distances = torch.cdist(query_embeds.unsqueeze(1), negative_embeds).squeeze(1)
-
-#     l_all = torch.sum(
-#         torch.clamp(positive_distance.unsqueeze(1) - negative_distances + margin, min=0),
-#         dim=1
-#     ) / negative_distances.shape[1]
-#     l_hard = torch.clamp(
-#         positive_distance - torch.min(negative_distances, dim=1).values + 2, min=0
-#     )
-
-#     return torch.mean(l_hard + l_all)
-
-
 def outfit_triplet_loss(query_embeds, positive_embeds, negative_embeds, margin=2):
     # Calculate distances
     positive_distance = torch.cdist(query_embeds.unsqueeze(1), positive_embeds).squeeze()

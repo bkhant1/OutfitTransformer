@@ -60,9 +60,9 @@ class PolyvoreDataset(Dataset):
 
         # Data Configurations
         self.img_dir = os.path.join(data_dir, 'images')
-        use_custom_transform = True if args.image_transform else False
-        self.image_processor = DeepFashionImageProcessor(size=args.image_size, use_custom_transform=use_custom_transform, custom_transform=args.image_transform)
+        self.image_processor = DeepFashionImageProcessor(size=args.image_size, custom_transform=args.image_transform)
         self.use_text = args.use_text
+        self.use_text_feature = args.use_text_feature
         if args.use_text:
             self.input_processor = DeepFashionInputProcessor(
                 categories=self.categories, use_image=True, image_processor=self.image_processor, \
@@ -110,6 +110,7 @@ class PolyvoreDataset(Dataset):
         ids=None, 
         target_id=None
     ) -> Dict[Literal['input_mask', 'img', 'desc'], Tensor]:
+        texts = None
         category = [self.item_id2category[item_id] for item_id in item_ids]
         if target_id is not None:
             category = [self.item_id2category[target_id]] + category

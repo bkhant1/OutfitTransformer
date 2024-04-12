@@ -40,7 +40,8 @@ class OutfitTransformer(nn.Module):
             txt_huggingface: str = 'sentence-transformers/paraphrase-albert-small-v2',
             nhead = 16,
             dim_feedforward = 512, # Not specified; use 4x the built-in size the same as BERT
-            num_layers = 6
+            num_layers = 6,
+            freeze_image_backbone=False
             ):
         super().__init__()
         if txt_backbone:
@@ -52,7 +53,8 @@ class OutfitTransformer(nn.Module):
         # Encoder
         self.img_encoder = build_img_encoder(
             backbone = img_backbone, 
-            embedding_dim = self.encode_dim
+            embedding_dim = self.encode_dim,
+            do_linear_probing=freeze_image_backbone
             )
         if txt_backbone:
             self.txt_encoder = build_txt_encoder(
